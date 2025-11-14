@@ -2,18 +2,14 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# -------------------------
 # Page Config
-# -------------------------
 st.set_page_config(
     page_title="Student Performance Dashboard",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# -------------------------
 # Load datasets
-# -------------------------
 # Original dataset for Home page charts
 df = pd.read_csv("student-scores.csv")
 df.columns = [col.strip().lower() for col in df.columns]
@@ -28,30 +24,87 @@ for feature in engineered_features:
     if feature in df_enhanced.columns:
         df[feature] = df_enhanced[feature]
 
-# -------------------------
 # Initialize session state
-# -------------------------
+
 if "page" not in st.session_state:
     st.session_state.page = "Home"
 
-# -------------------------
-# Sidebar
-# -------------------------
-st.sidebar.title("Dashboard Navigation")
+# Sidebar Styles
+st.sidebar.markdown("""
+<style>
+/* Style all Streamlit sidebar buttons */
+.stButton > button {
+    background-color: #222938;
+    color: white;
+    border-radius: 12px;
+    border: 1px solid #333;
+    width: 200px;       
+    height: 60px;       
+    text-align: left;
+    padding-left: 12px;
+    margin-bottom: 5px;
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    transition: 0.2s ease;
+}
+.stButton > button:hover {
+    transform: scale(1.03);
+    background-color: #2e3648;
+    cursor: pointer;
+}
 
-def sidebar_button(label, page_name):
-    if st.sidebar.button(label):
+/* Selected page style */
+.stButton > button.selected {
+    background-color: #EB9DA7 !important;
+    color: black !important;
+    border: 1px solid #c77d86;
+}
+
+/* Icon inside button */
+.stButton > button span.icon {
+    font-size: 20px;
+    margin-right: 10px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ---------- Sidebar Navigation ----------
+st.sidebar.markdown("""
+<h2 style='color:#ffffff; text-align:center; margin-bottom:10px; margin-top:10px;'>Dashboard Navigation</h2>
+<hr style='margin-top:5px; margin-bottom:15px;'>  <!-- increased bottom margin -->
+""", unsafe_allow_html=True)
+
+
+# ---------- Function to create sidebar card ----------
+def sidebar_card(label, page_name, icon):
+    if st.session_state.page == page_name:
+        # Add a 'selected' class for CSS
+        button = st.sidebar.button(f"{icon} {label}", key=page_name)
+        # Apply class by JS hack (works in Streamlit)
+        st.sidebar.markdown(f"""
+            <script>
+            const btn = window.parent.document.querySelectorAll('button[kind="secondary"]')[{list(st.session_state.keys()).index(page_name)}];
+            if(btn){{btn.classList.add('selected')}}
+            </script>
+        """, unsafe_allow_html=True)
+    else:
+        button = st.sidebar.button(f"{icon} {label}", key=page_name)
+
+    if button:
         st.session_state.page = page_name
-    st.sidebar.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
 
-sidebar_button("🏠 Home", "Home")
-sidebar_button("📊 Data Overview", "Data Overview")
-sidebar_button("📈 Visualizations", "Visualizations")
-sidebar_button("🔮 Predictions", "Predictions")
 
-# -------------------------
+# ---------- Cards ----------
+sidebar_card("Home", "Home", "🏠")
+sidebar_card("Data Overview", "Data Overview", "📊")
+sidebar_card("Visualizations", "Visualizations", "📈")
+sidebar_card("Predictions", "Predictions", "🔮")
+
+
+
 # Mini-card CSS with icons
-# -------------------------
 card_style = """
 <style>
 .metric-card {
@@ -86,20 +139,18 @@ card_style = """
 
 st.markdown(card_style, unsafe_allow_html=True)
 
-# -------------------------
-# Main Content - Home Page
-# -------------------------
+# Home Page
 if st.session_state.page == "Home":
     st.title("Welcome to the Student Performance Dashboard!")
     st.write("This page provides general insights into the student population.")
     st.write("### Key Insights")
 
-    # --- Metrics for mini-cards ---
+    # Metrics for mini-cards
     total_students = df.shape[0]
     avg_absence = df['absence_days'].mean() if 'absence_days' in df.columns else 0
     avg_self_study = df['weekly_self_study_hours'].mean() if 'weekly_self_study_hours' in df.columns else 0
 
-    # --- Display metrics in mini-cards with icons and tooltips ---
+    # Display metrics in mini-cards with icons and tooltips
     col1, col2, col3 = st.columns(3)
 
     col1.markdown(f"""
@@ -128,7 +179,7 @@ if st.session_state.page == "Home":
 
     st.markdown("---")
 
-    # --- Pie charts and bar charts ---
+    # Pie charts and bar charts
     # Gender Distribution
     if 'gender' in df.columns:
         gender_counts = df['gender'].fillna('Unknown').value_counts().reset_index()
@@ -190,7 +241,7 @@ if st.session_state.page == "Home":
     else:
         fig_career = None
 
-    # --- Display charts ---
+    # Display charts
     col1, col2, col3 = st.columns(3)
     if fig_gender:
         col1.plotly_chart(fig_gender, use_container_width=True)
@@ -205,16 +256,14 @@ if st.session_state.page == "Home":
     if fig_career:
         st.plotly_chart(fig_career, use_container_width=True)
 
-# -------------------------
-# Data Overview Page (Cleaned)
-# -------------------------
+# Data Overview Page
 elif st.session_state.page == "Data Overview":
     st.header("📊 Data Overview")
     st.write("This section provides a summary and insights of the dataset.")
 
     df_overview = df.drop(columns=['first_name', 'last_name', 'email'], errors='ignore')
 
-    # --- Basic Metrics ---
+    # Basic Metrics
     total_students = df_overview.shape[0]
     total_features = df_overview.shape[1]
     missing_values_count = df_overview.isnull().sum().sum()
@@ -258,7 +307,7 @@ elif st.session_state.page == "Data Overview":
 
     st.markdown("---")
 
-    # --- Dataset Health Summary ---
+    # Dataset Health Summary
     st.subheader("Dataset Summary")
     st.markdown(f"""
     - **Total Students (Rows):** {total_students}  
@@ -269,7 +318,7 @@ elif st.session_state.page == "Data Overview":
 
     st.markdown("---")
 
-    # --- Columns and Data Types ---
+    # Columns and Data Types (Original Features)
     st.subheader("Columns and Data Types (Original Features)")
     dtype_df = pd.DataFrame(df_overview.dtypes, columns=['Data Type']).reset_index()
     dtype_df.rename(columns={'index': 'Column'}, inplace=True)
@@ -277,7 +326,7 @@ elif st.session_state.page == "Data Overview":
 
     st.markdown("---")
 
-    # --- Columns with Missing Values ---
+    # Columns with Missing Values
     missing = df_overview.isnull().sum()
     missing = missing[missing > 0]
     st.subheader("Columns with Missing Values")
@@ -288,13 +337,13 @@ elif st.session_state.page == "Data Overview":
 
     st.markdown("---")
 
-    # --- Summary Statistics ---
+    # Summary Statistics
     st.subheader("Summary Statistics (Numeric Columns)")
     st.dataframe(df_overview.describe().T)
 
     st.markdown("---")
 
-    # --- Performance Category Distribution ---
+    # Performance Category Distribution
     if 'performance_category' in df.columns:
         st.subheader("Performance Category Distribution")
         perf_counts = df['performance_category'].value_counts().reset_index()
@@ -310,7 +359,7 @@ elif st.session_state.page == "Data Overview":
 
     st.markdown("---")
 
-    # --- Correlation Heatmap for Numeric Features ---
+    # Correlation Heatmap for Numeric Features
     st.subheader("Correlation Heatmap (Numeric Features)")
     numeric_df = df_overview.select_dtypes(include=['float64', 'int64'])
     if numeric_df.shape[1] > 1:
@@ -324,7 +373,7 @@ elif st.session_state.page == "Data Overview":
         )
         st.plotly_chart(fig_corr, use_container_width=True)
 
-    # --- Distributions of Numeric Features ---
+    # Distributions of Numeric Features
     st.subheader("Distributions of Numeric Features")
     for col in numeric_df.columns:
         fig = px.histogram(
@@ -336,7 +385,7 @@ elif st.session_state.page == "Data Overview":
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    # --- Engineered Features ---
+    # Engineered Features
     existing_engineered = [f for f in engineered_features if f in df.columns]
 
     if existing_engineered:
@@ -384,9 +433,7 @@ elif st.session_state.page == "Data Overview":
         st.dataframe(df[existing_engineered].head(10))
 
 
-# -------------------------
 # Visualizations Page
-# -------------------------
 elif st.session_state.page == "Visualizations":
     st.header("📈 Visualizations")
     st.write("Insights from selected and engineered features, plus predictive insights from the trained SVM model.")
@@ -395,7 +442,7 @@ elif st.session_state.page == "Visualizations":
     df_viz = pd.read_csv("student_scores_selected_features.csv")
     df_viz.columns = [col.strip().lower() for col in df_viz.columns]
 
-    # --- CLEANING STEPS ---
+    # Cleaning 
     # Strip string columns
     str_cols = df_viz.select_dtypes(include='object').columns
     for col in str_cols:
@@ -423,9 +470,7 @@ elif st.session_state.page == "Visualizations":
     # Drop rows with missing critical numeric values for plotting
     df_viz = df_viz.dropna(subset=['weekly_self_study_hours','average_score'])
 
-    # -------------------------
-    # 1. Study vs Performance (3D scatter with size)
-    # -------------------------
+    # 1. Study vs Performance using Scatter Plot
     st.subheader("Weekly Self-Study Hours vs Average Score vs Engagement")
     if 'weekly_self_study_hours' in df_viz.columns and 'average_score' in df_viz.columns:
         size_col = df_viz['engagement_score'].clip(lower=0) if 'engagement_score' in df_viz.columns else None
@@ -440,9 +485,8 @@ elif st.session_state.page == "Visualizations":
         )
         st.plotly_chart(fig_study, use_container_width=True)
 
-    # -------------------------
-    # 2. Average Score by Category (cleaner look)
-    # -------------------------
+
+    # 2. Average Score by Category 
     st.subheader("Average Score by Performance Category")
     if 'performance_category' in df_viz.columns and 'average_score' in df_viz.columns:
         agg = df_viz.groupby('performance_category')['average_score'].agg(['mean', 'std']).reset_index()
@@ -456,9 +500,7 @@ elif st.session_state.page == "Visualizations":
         )
         st.plotly_chart(fig_bar, use_container_width=True)
 
-    # -------------------------
     # 3. Simplified Correlation Heatmap
-    # -------------------------
     st.subheader("Correlation Heatmap of Core Scores")
     core_scores = [c for c in [
         'average_score','math_score','history_score','physics_score',
@@ -474,9 +516,7 @@ elif st.session_state.page == "Visualizations":
         )
         st.plotly_chart(fig_corr, use_container_width=True)
 
-    # -------------------------
     # 4. Distribution of High Scorers
-    # -------------------------
     st.subheader("Distribution of High Scorers")
     high_scorers = df_viz[df_viz['average_score'] >= df_viz['average_score'].mean()]
     if not high_scorers.empty:
@@ -489,9 +529,7 @@ elif st.session_state.page == "Visualizations":
         )
         st.plotly_chart(fig_high, use_container_width=True)
 
-    # -------------------------
     # 5. Career Aspirations
-    # -------------------------
     st.subheader("Career Aspirations Distribution")
     career_cols = [c for c in df_viz.columns if c.startswith('career_aspiration_')]
     if career_cols:
@@ -500,9 +538,7 @@ elif st.session_state.page == "Visualizations":
         fig_career = px.bar(career_counts, x='career', y='count', color='career', title="Career Aspirations")
         st.plotly_chart(fig_career, use_container_width=True)
 
-    # -------------------------
     # 6. Performance Category Pie
-    # -------------------------
     st.subheader("Performance Category Distribution")
     if 'performance_category' in df_viz.columns:
         perf_counts = df_viz['performance_category'].value_counts().reset_index()
@@ -510,9 +546,7 @@ elif st.session_state.page == "Visualizations":
         fig_perf = px.pie(perf_counts, names='category', values='count', title="Performance Category Distribution")
         st.plotly_chart(fig_perf, use_container_width=True)
 
-    # -------------------------
-    # 7. Feature Importance (from SVM)
-    # -------------------------
+    # 7. Feature Importance based on SVM Model
     import joblib
     import numpy as np
     from sklearn.inspection import permutation_importance
@@ -520,7 +554,7 @@ elif st.session_state.page == "Visualizations":
     st.subheader("Feature Importance from Trained SVM Model")
 
     try:
-        # --- Load model bundle (new version) ---
+        # Load model bundle
         model_bundle = joblib.load("svm_model.pkl")
 
         if isinstance(model_bundle, tuple) and len(model_bundle) == 4:
@@ -546,7 +580,7 @@ elif st.session_state.page == "Visualizations":
         # Scale features
         X_scaled = scaler.transform(X_viz)
 
-        # Create dummy target (just to compute importance)
+        # Create dummy target 
         y_dummy = df_viz['performance_category'].astype('category').cat.codes
 
         # Compute permutation-based importance
@@ -569,9 +603,7 @@ elif st.session_state.page == "Visualizations":
     except Exception as e:
         st.info(f"Feature importance will appear once the SVM model is saved and available. Error: {e}")
 
-    # -------------------------
-    # 8. Filter by Category (Interactive)
-    # -------------------------
+    # 8. Filter by Category and Display Data
     st.subheader("Explore Students by Category")
     if 'performance_category' in df_viz.columns:
         category_filter = st.selectbox("Select Performance Category", df_viz['performance_category'].unique())
@@ -588,21 +620,17 @@ elif st.session_state.page == "Predictions":
     import joblib
     import numpy as np
     import pandas as pd
-    import matplotlib.pyplot as plt
     import plotly.express as px
 
-    # -------------------------
     # Tabs for model selection
-    # -------------------------
     tab1, tab2 = st.tabs(["🎯 SVM Classification", "⚠️ XGBoost At-Risk"])
 
-    # =====================================================
-    # 1️⃣ SVM Performance Classification
-    # =====================================================
+    # SVM Performance Classification
     with tab1:
         st.subheader("🎯 Student Performance Classification (SVM)")
 
         try:
+            # Load bundled model objects
             model_bundle = joblib.load("svm_model.pkl")
             if isinstance(model_bundle, tuple):
                 svm_model, scaler, features, label_encoder = model_bundle
@@ -618,56 +646,63 @@ elif st.session_state.page == "Predictions":
         if svm_model:
             mode = st.radio("Choose input mode:", ["Manual Input", "Upload CSV"], horizontal=True)
 
-            # ==============================
-            # MANUAL INPUT MODE
-            # ==============================
+            # Manual Input Mode
             if mode == "Manual Input":
                 st.write("Enter student details below:")
+
+                # Remove career aspiration features
+                input_features = [f for f in features if "career_aspiration" not in f.lower()]
+
+                # Define reasonable ranges for known features
+                feature_limits = {
+                    "average_score": (0, 100),
+                    "science_avg": (0, 100),
+                    "humanities_avg": (0, 100),
+                    "performance_consistency": (0, 100),
+                    "weekly_self_study_hours": (0, 168),  # max 24*7 hours/week
+                    "engagement_score": (0, 100),
+                    "absence_days": (0, 365),
+                }
+
+                # Collect user input with limits
                 user_input = {}
-                for feat in features:
-                    user_input[feat] = st.number_input(f"{feat.replace('_',' ').title()}", value=0.0)
+                for feat in input_features:
+                    min_val, max_val = feature_limits.get(feat, (0, 100))
+                    user_input[feat] = st.number_input(
+                        f"{feat.replace('_',' ').title()}",
+                        value=min_val,
+                        min_value=min_val,
+                        max_value=max_val
+                    )
 
                 if st.button("Predict Performance Category"):
                     X_input = pd.DataFrame([user_input])
+
+                    # Fill missing columns with 0 
+                    for feat in features:
+                        if feat not in X_input.columns:
+                            X_input[feat] = 0
+
+                    # Ensure correct column order
+                    X_input = X_input[features]
+
+                    # Scale input
                     X_scaled = scaler.transform(X_input)
+
+                    # Predict
                     pred = svm_model.predict(X_scaled)
 
-                    # Manual category map (if label encoder missing)
-                    category_map = {
-                        0: "Low",
-                        1: "Average",
-                        2: "High",
-                        3: "Excellent"
-                    }
-
+                    # Map to class labels
                     if label_encoder:
                         pred_label = label_encoder.inverse_transform(pred)[0]
+                        categories = label_encoder.classes_
                     else:
-                        pred_label = category_map.get(int(pred[0]), f"Unknown ({pred[0]})")
+                        categories = ["Low", "Average", "Excellent"]
+                        pred_label = categories[int(pred[0])]
 
                     st.success(f"Predicted Performance Category: **{pred_label}**")
 
-                    # Show prediction probabilities (if available)
-                    if hasattr(svm_model, "predict_proba"):
-                        probs = svm_model.predict_proba(X_scaled)[0]
-                        if label_encoder:
-                            categories = label_encoder.inverse_transform(svm_model.classes_)
-                        else:
-                            categories = [category_map.get(int(c), f"Class {c}") for c in svm_model.classes_]
-
-                        prob_df = pd.DataFrame({
-                            "Category": categories,
-                            "Probability": probs
-                        })
-                        fig_prob = px.bar(
-                            prob_df, x="Category", y="Probability",
-                            color="Category", title="Prediction Probabilities",
-                            text=prob_df["Probability"].round(2)
-                        )
-                        fig_prob.update_traces(textposition="outside")
-                        st.plotly_chart(fig_prob, use_container_width=True)
-
-            #Upload CSV Option
+            # CSV Upload MODE
             elif mode == "Upload CSV":
                 uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
                 if uploaded_file:
@@ -681,17 +716,12 @@ elif st.session_state.page == "Predictions":
                         X_scaled = scaler.transform(df_input[features])
                         preds = svm_model.predict(X_scaled)
 
-                        category_map = {
-                            0: "Low",
-                            1: "Average",
-                            2: "High",
-                            3: "Excellent"
-                        }
-
                         if label_encoder:
                             pred_labels = label_encoder.inverse_transform(preds)
+                            categories = label_encoder.classes_
                         else:
-                            pred_labels = [category_map.get(int(p), f"Unknown ({p})") for p in preds]
+                            categories = ["Low", "Average", "Excellent"]
+                            pred_labels = [categories[int(p)] for p in preds]
 
                         df_input["Predicted_Performance"] = pred_labels
                         st.success("Predictions completed!")
@@ -705,7 +735,7 @@ elif st.session_state.page == "Predictions":
                             mime="text/csv"
                         )
 
-    #XGBoost At-Risk Prediction
+    # XGBoost At-Risk Prediction
     with tab2:
         st.subheader("⚠️ Predict At-Risk Students (XGBoost)")
 
@@ -718,14 +748,34 @@ elif st.session_state.page == "Predictions":
             xgb_model, xgb_scaler, xgb_features = None, None, None
 
         if xgb_model:
-            mode = st.radio("Choose input mode:", ["Manual Input", "Upload CSV"], horizontal=True, key="xgb_mode")
+            mode = st.radio(
+                "Choose input mode:", ["Manual Input", "Upload CSV"],
+                horizontal=True, key="xgb_mode"
+            )
 
-            # Manual input
+            # Manual Input Mode
             if mode == "Manual Input":
                 st.write("Enter student behavioral details:")
+
+                # Define reasonable ranges for behavioral features
+                behavioral_limits = {
+                    "weekly_self_study_hours": (0, 168),
+                    "engagement_score": (0, 100),
+                    "performance_consistency": (0, 100),
+                    "science_avg": (0, 100),
+                    "humanities_avg": (0, 100),
+                }
+
                 xgb_input = {}
                 for i, f in enumerate(xgb_features):
-                    xgb_input[f] = st.number_input(f"{f.replace('_',' ').title()}", value=0.0, key=f"xgb_{i}")
+                    min_val, max_val = behavioral_limits.get(f, (0, 100))
+                    xgb_input[f] = st.number_input(
+                        f"{f.replace('_',' ').title()}",
+                        value=min_val,
+                        min_value=min_val,
+                        max_value=max_val,
+                        key=f"xgb_{i}"
+                    )
 
                 if st.button("Predict At-Risk Status"):
                     X_input = pd.DataFrame([xgb_input])
@@ -733,15 +783,15 @@ elif st.session_state.page == "Predictions":
                     pred = xgb_model.predict(X_scaled)[0]
                     pred_proba = xgb_model.predict_proba(X_scaled)[0][1]
 
-                    status = "The Student is at Risk" if pred == 1 else "The student is not At Risk"
+                    status = "The Student is At Risk" if pred == 1 else "The Student is Not At Risk"
                     st.success(f"Prediction: **{status}** ({pred_proba:.2%} probability)")
 
-            # CSV Upload
-            else:
+            # CSV Upload Mode
+            elif mode == "Upload CSV":
                 uploaded_file = st.file_uploader("Upload your dataset (CSV)", type=["csv"], key="xgb_file")
                 if uploaded_file:
                     user_df = pd.read_csv(uploaded_file)
-                    st.write("✅ File uploaded successfully!")
+                    st.write("File uploaded successfully!")
                     st.dataframe(user_df.head())
 
                     missing_features = [f for f in xgb_features if f not in user_df.columns]
@@ -759,4 +809,9 @@ elif st.session_state.page == "Predictions":
                         st.dataframe(user_df[['Predicted_Status', 'At-Risk Probability'] + xgb_features].head())
 
                         csv = user_df.to_csv(index=False).encode('utf-8')
-                        st.download_button("⬇️ Download Predictions", csv, "xgb_at_risk_predictions.csv", "text/csv")
+                        st.download_button(
+                            "⬇️ Download Predictions",
+                            csv,
+                            "xgb_at_risk_predictions.csv",
+                            "text/csv"
+                        )
