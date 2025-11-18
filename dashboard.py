@@ -613,6 +613,8 @@ elif st.session_state.page == "Visualizations":
         st.dataframe(filtered[filtered_cols])
 
 
+
+
 elif st.session_state.page == "Predictions":
     st.header("🔮 Predictions Dashboard")
     st.write("Predict student performance or at-risk status using your trained models.")
@@ -622,15 +624,22 @@ elif st.session_state.page == "Predictions":
     import pandas as pd
     import plotly.express as px
 
+     # Mapping numeric performance labels to categories
+    performance_mapping = {
+        0: "Low",
+        1: "Average",
+        2: "High",
+        3: "Excellent"
+    }
+
     # Tabs for model selection
     tab1, tab2 = st.tabs(["🎯 SVM Classification", "⚠️ XGBoost At-Risk"])
 
-    # SVM Performance Classification
+    # ================= SVM Performance Classification =================
     with tab1:
         st.subheader("🎯 Student Performance Classification (SVM)")
 
         try:
-            # Load bundled model objects
             model_bundle = joblib.load("svm_model.pkl")
             if isinstance(model_bundle, tuple):
                 svm_model, scaler, features, label_encoder = model_bundle
@@ -644,98 +653,131 @@ elif st.session_state.page == "Predictions":
             svm_model, scaler, features, label_encoder = None, None, None, None
 
         if svm_model:
-            mode = st.radio("Choose input mode:", ["Manual Input", "Upload CSV"], horizontal=True)
+            mode = st.radio("Choose input mode:", ["Manual Input", "Upload CSV"], horizontal=True, key="svm_mode")
 
-            # Manual Input Mode
+            # ---------------- Manual Input ----------------
             if mode == "Manual Input":
                 st.write("Enter student details below:")
-
-                # Remove career aspiration features
                 input_features = [f for f in features if "career_aspiration" not in f.lower()]
-
-                # Define reasonable ranges for known features
                 feature_limits = {
                     "average_score": (0, 100),
                     "science_avg": (0, 100),
                     "humanities_avg": (0, 100),
                     "performance_consistency": (0, 100),
-                    "weekly_self_study_hours": (0, 168),  # max 24*7 hours/week
+                    "weekly_self_study_hours": (0, 168),
                     "engagement_score": (0, 100),
                     "absence_days": (0, 365),
                 }
 
-                # Collect user input with limits
                 user_input = {}
                 for feat in input_features:
                     min_val, max_val = feature_limits.get(feat, (0, 100))
                     user_input[feat] = st.number_input(
                         f"{feat.replace('_',' ').title()}",
-                        value=min_val,
-                        min_value=min_val,
-                        max_value=max_val
+                        value=min_val, min_value=min_val, max_value=max_val,
+                        key=f"svm_manual_{feat}"
                     )
 
-                if st.button("Predict Performance Category"):
+                if st.button("Predict Performance Category", key="svm_manual_predict"):
                     X_input = pd.DataFrame([user_input])
-
-                    # Fill missing columns with 0 
                     for feat in features:
                         if feat not in X_input.columns:
                             X_input[feat] = 0
-
-                    # Ensure correct column order
                     X_input = X_input[features]
-
-                    # Scale input
                     X_scaled = scaler.transform(X_input)
-
-                    # Predict
                     pred = svm_model.predict(X_scaled)
-
-                    # Map to class labels
-                    if label_encoder:
+                    try:
                         pred_label = label_encoder.inverse_transform(pred)[0]
-                        categories = label_encoder.classes_
-                    else:
-                        categories = ["Low", "Average", "Excellent"]
-                        pred_label = categories[int(pred[0])]
+                    except:
+                        pred_label = int(pred[0])
 
+                    pred_label = performance_mapping.get(pred_label, str(pred_label))
                     st.success(f"Predicted Performance Category: **{pred_label}**")
 
-            # CSV Upload MODE
+            # ---------------- CSV Upload ----------------
             elif mode == "Upload CSV":
-                uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
+                uploaded_file = st.file_uploader("Upload your dataset (CSV)", type=["csv"], key="svm_file")
+                st.info("📌 Please upload a CSV that contains ALL required model features.")
+                
+                st.download_button(
+                    "📄 Download Template CSV (Correct Columns)",
+                    open("student_scores_selected_features.csv", "rb").read(),
+                    "template_student_features.csv",
+                    "text/csv",
+                    key="svm_template_download"
+                )
+
                 if uploaded_file:
                     df_input = pd.read_csv(uploaded_file)
-                    st.write("Data Preview:", df_input.head())
+                    st.success("File uploaded successfully!")
+                    st.dataframe(df_input.head())
 
-                    missing_cols = [f for f in features if f not in df_input.columns]
-                    if missing_cols:
-                        st.error(f"Missing required columns: {', '.join(missing_cols)}")
-                    else:
-                        X_scaled = scaler.transform(df_input[features])
-                        preds = svm_model.predict(X_scaled)
+                    column_mapping = {
+                        "avg_score": "average_score",
+                        "science_average": "science_avg",
+                        "humanities_average": "humanities_avg",
+                        "consistency": "performance_consistency",
+                        "career_BusinessOwner": "career_aspiration_Business Owner",
+                        "career_Doctor": "career_aspiration_Doctor",
+                    }
+                    df_input.rename(columns={k: v for k, v in column_mapping.items() if k in df_input.columns}, inplace=True)
 
-                        if label_encoder:
-                            pred_labels = label_encoder.inverse_transform(preds)
-                            categories = label_encoder.classes_
-                        else:
-                            categories = ["Low", "Average", "Excellent"]
-                            pred_labels = [categories[int(p)] for p in preds]
+                    overlap = [col for col in features if col in df_input.columns]
+                    if len(overlap) == 0:
+                        st.error("❌ Uploaded CSV does not contain recognized model features.")
+                        st.stop()
 
-                        df_input["Predicted_Performance"] = pred_labels
-                        st.success("Predictions completed!")
-                        st.write(df_input.head())
+                    for col in features:
+                        if col not in df_input.columns:
+                            df_input[col] = 0
 
-                        csv = df_input.to_csv(index=False).encode("utf-8")
-                        st.download_button(
-                            "📥 Download Predictions",
-                            data=csv,
-                            file_name="svm_predictions.csv",
-                            mime="text/csv"
-                        )
+                    X_scaled = scaler.transform(df_input[features])
+                    preds = svm_model.predict(X_scaled)
+                    try:
+                        pred_labels = label_encoder.inverse_transform(preds)
+                    except:
+                        pred_labels = [str(p) for p in preds]
+                    # If label_encoder exists, decode first
+                    try:
+                        pred_labels = label_encoder.inverse_transform(preds)
+                    except:
+                        pred_labels = preds  # numeric labels if no encoder
 
-    # XGBoost At-Risk Prediction
+                    # Map numeric labels to categories
+                    df_input["Predicted_Performance"] = [performance_mapping.get(int(p), str(p)) for p in pred_labels]
+
+
+                    # ---------- Visualizations ----------
+                    fig_count = px.histogram(df_input, x="Predicted_Performance", color="Predicted_Performance",
+                                             title="Distribution of Predicted Performance Categories", text_auto=True)
+                    st.plotly_chart(fig_count, use_container_width=True, key="svm_fig_count")
+
+                    if len(features) > 1:
+                        corr_df = df_input[features].corr()
+                        fig_corr = px.imshow(corr_df, text_auto=True, color_continuous_scale='Viridis',
+                                             title="Feature Correlation Heatmap")
+                        st.plotly_chart(fig_corr, use_container_width=True, key="svm_fig_corr")
+
+                    num_feats = [f for f in features if df_input[f].dtype in [np.float64, np.int64]]
+                    if len(num_feats) >= 2:
+                        fig_scatter = px.scatter(df_input, x=num_feats[0], y=num_feats[1], color="Predicted_Performance",
+                                                 title=f"{num_feats[0]} vs {num_feats[1]} by Predicted Performance",
+                                                 hover_data=features)
+                        st.plotly_chart(fig_scatter, use_container_width=True, key="svm_fig_scatter")
+
+                    st.success("✔ Predictions completed!")
+                    st.dataframe(df_input.head())
+
+                    csv = df_input.to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        "⬇️ Download Predictions",
+                        data=csv,
+                        file_name="svm_predictions.csv",
+                        mime="text/csv",
+                        key="svm_download"
+                    )
+
+    # ================= XGBoost At-Risk Prediction =================
     with tab2:
         st.subheader("⚠️ Predict At-Risk Students (XGBoost)")
 
@@ -748,16 +790,11 @@ elif st.session_state.page == "Predictions":
             xgb_model, xgb_scaler, xgb_features = None, None, None
 
         if xgb_model:
-            mode = st.radio(
-                "Choose input mode:", ["Manual Input", "Upload CSV"],
-                horizontal=True, key="xgb_mode"
-            )
+            mode = st.radio("Choose input mode:", ["Manual Input", "Upload CSV"], horizontal=True, key="xgb_mode")
 
-            # Manual Input Mode
+            # Manual Input
             if mode == "Manual Input":
                 st.write("Enter student behavioral details:")
-
-                # Define reasonable ranges for behavioral features
                 behavioral_limits = {
                     "weekly_self_study_hours": (0, 168),
                     "engagement_score": (0, 100),
@@ -765,53 +802,87 @@ elif st.session_state.page == "Predictions":
                     "science_avg": (0, 100),
                     "humanities_avg": (0, 100),
                 }
-
                 xgb_input = {}
                 for i, f in enumerate(xgb_features):
                     min_val, max_val = behavioral_limits.get(f, (0, 100))
-                    xgb_input[f] = st.number_input(
-                        f"{f.replace('_',' ').title()}",
-                        value=min_val,
-                        min_value=min_val,
-                        max_value=max_val,
-                        key=f"xgb_{i}"
-                    )
+                    xgb_input[f] = st.number_input(f"{f.replace('_',' ').title()}",
+                                                   value=min_val, min_value=min_val, max_value=max_val,
+                                                   key=f"xgb_manual_{f}")
 
-                if st.button("Predict At-Risk Status"):
+                if st.button("Predict At-Risk Status", key="xgb_manual_predict"):
                     X_input = pd.DataFrame([xgb_input])
                     X_scaled = xgb_scaler.transform(X_input)
                     pred = xgb_model.predict(X_scaled)[0]
                     pred_proba = xgb_model.predict_proba(X_scaled)[0][1]
-
-                    status = "The Student is At Risk" if pred == 1 else "The Student is Not At Risk"
+                    status = "At Risk" if pred == 1 else "Not At Risk"
                     st.success(f"Prediction: **{status}** ({pred_proba:.2%} probability)")
 
-            # CSV Upload Mode
+            # CSV Upload
             elif mode == "Upload CSV":
-                uploaded_file = st.file_uploader("Upload your dataset (CSV)", type=["csv"], key="xgb_file")
+                uploaded_file = st.file_uploader("Upload your dataset (CSV)", type=["csv"], key="xgb_file_upload")
+                st.info("📌 Please upload a CSV that contains ALL required model features.")
+
+                st.download_button(
+                    "📄 Download Template CSV (Correct Columns)",
+                    open("student_scores_selected_features.csv", "rb").read(),
+                    "template_student_features.csv",
+                    "text/csv",
+                    key="xgb_template_download"
+                )
+
                 if uploaded_file:
                     user_df = pd.read_csv(uploaded_file)
-                    st.write("File uploaded successfully!")
+                    st.success("File uploaded successfully!")
                     st.dataframe(user_df.head())
 
-                    missing_features = [f for f in xgb_features if f not in user_df.columns]
-                    if missing_features:
-                        st.warning(f"The following required features are missing: {missing_features}")
-                    else:
-                        X_input = user_df[xgb_features]
-                        X_scaled = xgb_scaler.transform(X_input)
-                        preds = xgb_model.predict(X_scaled)
-                        pred_probas = xgb_model.predict_proba(X_scaled)[:, 1]
+                    column_mapping = {
+                        "avg_score": "average_score",
+                        "science_average": "science_avg",
+                        "humanities_average": "humanities_avg",
+                        "consistency": "performance_consistency",
+                        "career_BusinessOwner": "career_aspiration_Business Owner",
+                        "career_Doctor": "career_aspiration_Doctor",
+                    }
+                    user_df.rename(columns={k: v for k, v in column_mapping.items() if k in user_df.columns}, inplace=True)
 
-                        user_df['Predicted_Status'] = np.where(preds == 1, "At Risk", "Not At Risk")
-                        user_df['At-Risk Probability'] = pred_probas
+                    overlap = [col for col in xgb_features if col in user_df.columns]
+                    if len(overlap) == 0:
+                        st.error("❌ Uploaded CSV does not contain recognized features.")
+                        st.stop()
 
-                        st.dataframe(user_df[['Predicted_Status', 'At-Risk Probability'] + xgb_features].head())
+                    for col in xgb_features:
+                        if col not in user_df.columns:
+                            user_df[col] = 0
 
-                        csv = user_df.to_csv(index=False).encode('utf-8')
-                        st.download_button(
-                            "⬇️ Download Predictions",
-                            csv,
-                            "xgb_at_risk_predictions.csv",
-                            "text/csv"
-                        )
+                    X_input = user_df[xgb_features]
+                    X_scaled = xgb_scaler.transform(X_input)
+                    preds = xgb_model.predict(X_scaled)
+                    pred_probas = xgb_model.predict_proba(X_scaled)[:, 1]
+                    user_df['Predicted_Status'] = np.where(preds == 1, "At Risk", "Not At Risk")
+                    user_df['At-Risk Probability'] = pred_probas
+
+                    st.success("✔ Prediction complete!")
+                    st.dataframe(user_df[['Predicted_Status', 'At-Risk Probability'] + xgb_features].head())
+
+                    # ---------- Visualizations ----------
+                    fig_count = px.histogram(user_df, x="Predicted_Status", color="Predicted_Status",
+                                             title="Distribution of Predicted At-Risk Status", text_auto=True)
+                    st.plotly_chart(fig_count, use_container_width=True, key="xgb_fig_count")
+
+                    fig_prob = px.histogram(user_df, x="At-Risk Probability", nbins=20,
+                                            title="Distribution of At-Risk Probabilities", color_discrete_sequence=["crimson"])
+                    st.plotly_chart(fig_prob, use_container_width=True, key="xgb_fig_prob")
+
+                    num_feats = [f for f in xgb_features if user_df[f].dtype in [np.float64, np.int64]]
+                    if len(num_feats) >= 2:
+                        fig_scatter = px.scatter(user_df, x=num_feats[0], y=num_feats[1], color="At-Risk Probability",
+                                                 color_continuous_scale='RdYlGn_r',
+                                                 title=f"{num_feats[0]} vs {num_feats[1]} by At-Risk Probability",
+                                                 hover_data=xgb_features)
+                        st.plotly_chart(fig_scatter, use_container_width=True, key="xgb_fig_scatter")
+
+                    csv = user_df.to_csv(index=False).encode('utf-8')
+                    st.download_button("⬇️ Download Predictions", csv,
+                                       "xgb_at_risk_predictions.csv", "text/csv", key="xgb_download")
+
+
